@@ -1,14 +1,181 @@
 <script setup lang="ts">
-import {post} from '@/utils/request'
+import { ref } from 'vue'
+import { Message } from '@arco-design/web-vue'
+import { debugApp } from '@/services/app'
+import { useRoute } from 'vue-router'
 
-async function debug() {
-  const response = await post('/apps/c6df4fd2-8c59-499d-adec-13daa3ff161d/debug', {body: {query: '你好，你是谁'}})
+const route = useRoute()
+
+const query = ref('')
+const messages = ref<{ role: string; content: string }[]>([])
+const isLoading = ref(false)
+
+const clearMessages = () => {
+  messages.value = []
 }
-console.log(Response)
+
+const send = async () => {
+  if (!query.value){
+    Message.error('用户提问不能为空')
+    return
+  }
+  if (isLoading.value){
+    Message.warning('上一次回复还没结束，请稍等')
+    return
+  }
+
+  try {
+    const humanQuery = query.value
+    messages.value.push({
+    role: 'human',
+    content: humanQuery,
+    })
+    query.value = ''
+    isLoading.value = true
+    const response = await debugApp(route.params.app_id as string, humanQuery)
+    const content = response.data.content
+    messages.value.push({
+      role: 'ai',
+      content: content,
+    })
+  } catch (error) {
+    Message.error(error instanceof Error ? error.message : String(error))
+  } finally {
+      isLoading.value = false
+    }
+}
 </script>
 
 <template>
-  <a-button @click="debug">发起请求</a-button>
+  <!--最外层容器，高度撑满整个浏览器屏幕-->
+  <div class="min-h-screen">
+    <!--顶部导航-->
+    <header class="flex items-center h-[74px] bg-gray-100 border-b border-gray-200 px-4">
+      顶部导航
+    </header>
+
+    <!--底部内容区：左侧编排 2/3，右侧调试 1/3-->
+    <div class="flex flex-row h-[calc(100vh-74px)]">
+      <!--左侧的编排-->
+      <div class="flex flex-col w-2/3 bg-gray-50 h-full border-r border-gray-200">
+        <div class="flex items-center h-[70px] px-6 text-xl border-b border-gray-200">
+          应用编排
+        </div>
+        <div class="flex flex-row h-[calc(100%-64px)]">
+          <div class="w-1/2 h-full px-6 py-4 border-r border-gray-200">人设与回复逻辑</div>
+          <div class="w-1/2 h-full px-6 py-4">应用能力</div>
+        </div>
+      </div>
+
+      <!--右侧调试与预览-->
+      <div class="flex flex-col w-1/3 bg-white h-full">
+        <!-- 调试与预览 -->
+        <header
+          class="flex flex-shrink-0 items-center h-16 px-4 text-xl bg-white border-b border-gray-200"
+        >
+          调试与预览
+        </header>
+        
+
+        <!-- 调试对话界面 -->
+        <div
+          class="h-full min-h-0 px-6 py-7 overflow-x-hidden overflow-y-scroll scrollbar-w-none"
+        >
+          <!-- 没有消息时的空状态 -->
+          <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full gap-3">
+            <a-avatar :size="70" shape="square" :style="{ backgroundColor: '#00d0b6' }">
+              <icon-apps :size="32" />
+            </a-avatar>
+            <div class="text-2xl font-bold text-gray-900">ChatGPT聊天机器人</div>
+          </div>
+
+          <!-- 消息列表 -->
+          <template v-else>
+            <div v-for="(message, idx) in messages" :key="idx" class="flex flex-row gap-2 mb-6">
+              <!--头像-->
+              <a-avatar
+                :size="30"
+                class="flex-shrink-0"
+                :style="{ backgroundColor: message.role === 'human' ? '#3370ff' : '#00d0b6' }"
+              >
+                <span v-if="message.role === 'human'">慕</span>
+                <icon-apps v-else />
+              </a-avatar>
+              <!--实际消息-->
+              <div class="flex flex-col gap-2">
+                <div class="font-semibold text-gray-700">
+                  {{ message.role === 'human' ? '慕小课' : 'ChatGPT聊天机器人' }}
+                </div>
+                <div
+                  class="px-4 py-3 rounded-2xl leading-relaxed"
+                  :class="
+                    message.role === 'human'
+                      ? 'bg-blue-700 text-white'
+                      : 'bg-blue-100 text-gray-900 border border-gray-200'
+                  "
+                >
+                  {{ message.content }}
+                </div>
+              </div>
+            </div>
+
+            <!-- AI 加载状态 -->
+            <div v-if="isLoading" class="flex flex-row gap-2 mb-6">
+              <a-avatar :size="30" class="flex-shrink-0" :style="{ backgroundColor: '#00d0b6' }">
+                <icon-apps />
+              </a-avatar>
+              <div class="flex flex-col gap-2">
+                <div class="font-semibold text-gray-700">ChatGPT聊天机器人</div>
+                <div class="bg-gray-100 px-4 py-3 rounded-2xl">
+                  <icon-loading />
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 调试对话输入框 -->
+        <div class="w-full flex-shrink-0 flex flex-col">
+          <!-- 顶部输入框 -->
+          <div class="px-6 flex items-center gap-4">
+            <!-- 清除按钮 -->
+            <a-button class="flex-shrink-0" type="text" shape="circle" @click="clearMessages">
+              <template #icon>
+                <icon-empty size="16" :style="{ color: '#374151' }" />
+              </template>
+            </a-button>
+
+            <!-- 输入框组件 -->
+            <div
+              class="h-[50px] flex items-center gap-2 px-4 flex-1 border border-gray-200 rounded-full"
+            >
+              <input
+                type="text"
+                class="flex-1 outline-none focus:outline-none"
+                v-model="query"
+                @keyup.enter="send"
+              />
+              <a-button type="text" shape="circle">
+                <template #icon>
+                  <icon-plus-circle size="16" :style="{ color: '#374151' }" />
+                </template>
+              </a-button>
+              <a-button type="text" shape="circle" @click="send">
+                <template #icon>
+                  <icon-send size="16" :style="{ color: '#1d4ed8' }" />
+                </template>
+              </a-button>
+            </div>
+          </div>
+
+          <!-- 底部提示文字 -->
+          <div class="text-center text-gray-500 text-xs py-4">
+            内容由AI生成，无法确保真实准确，仅供参考。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped></style>
