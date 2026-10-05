@@ -1,3 +1,4 @@
+import { Message } from '@arco-design/web-vue'
 import { apiPrefix, httpCode } from '@/config'
 
 // 1.超时时间 100s
@@ -67,10 +68,14 @@ const baseFetch = <T>(url: string, fetchOptions: FetchOptionType): Promise<T> =>
           if (json.code === httpCode.success) {
             resolve(json)
           } else {
+            // 业务失败：弹一个提示，同时把错误抛给调用方
+            Message.error(json.message)
             reject(new Error(json.message))
           }
         })
         .catch((err) => {
+          // 网络层失败（连不上、超时、CORS 等）
+          Message.error(err.message)
           reject(err)
         })
     }),

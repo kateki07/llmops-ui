@@ -10,3 +10,12 @@ export const httpCode = {
   forbidden: 'forbidden',
   validateError: 'validate_error',
 }
+
+// 插件参数的类型字符串 -> 中文显示名
+// 后端返回的是 "str" / "int" 这类，页面上要显示中文
+export const typeMap: { [key: string]: string } = {
+  str: '字符串',
+  int: '整型',
+  float: '浮点型',
+  bool: '布尔值',
+}
