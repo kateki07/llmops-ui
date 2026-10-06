@@ -16,6 +16,8 @@ import {
   updateApiToolProvider,
   validateOpenAPISchema,
 } from '@/services/api-tool'
+import { uploadImage } from '@/services/upload-file'
+import { makeBeforeRemove, makeCustomRequest } from '@/utils/helper'
 import moment from 'moment/moment'
 import { typeMap } from '@/config'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -37,13 +39,24 @@ const paginator = reactive({
   total_record: 0,
 })
 const form = reactive({
-  icon: 'https://picsum.photos/400',
+  // a-upload 的受控文件列表；icon 存上传成功后拿到的真实 URL
+  fileList: [] as { uid: string; name: string; url: string }[],
+  icon: '',
   name: '',
   openapi_schema: '',
   // 不标类型的话 TS 会把空数组推断成 never[]，后面 header.key 就报错
   headers: [] as ApiToolHeader[],
 })
 const formRef = ref<FormInstance | null>(null)
+// a-upload 的两个回调抽到 helper 里：内联 async 返回的是 Promise，
+// 而组件要求同步返回 UploadRequest，类型过不了
+const iconRequest = makeCustomRequest(
+  uploadImage,
+  (resp) => resp.data.image_url,
+  (url) => (form.icon = url),
+)
+const iconRemove = makeBeforeRemove(() => (form.icon = ''))
+
 const showIdx = ref<number>(-1)
 const loading = ref<boolean>(false)
 const showUpdateModal = ref<boolean>(false)
@@ -160,6 +173,7 @@ const handleUpdate = async () => {
 
     // 3.更新form表单数据
     formRef.value?.resetFields()
+    form.fileList = [{ uid: '1', name: '插件图标', url: data.icon }]
     form.icon = data.icon
     form.name = data.name
     form.openapi_schema = data.openapi_schema
@@ -295,7 +309,7 @@ watch(
             </a-avatar>
             <div class="text-xs text-gray-400">
               {{ accountStore.account.name }} · 编辑时间
-              {{ moment(provider.created_at).format('MM-DD HH:mm') }}
+              {{ moment(provider.created_at * 1000).format('MM-DD HH:mm') }}
             </div>
           </div>
         </a-card>
@@ -309,7 +323,7 @@ watch(
       </a-col>
     </a-row>
     <!-- 加载器 -->
-    <a-row v-if="providers.length > 0">
+    <a-row v-if="paginator.total_page >= 2">
       <!-- 加载数据中 -->
       <a-col v-if="paginator.current_page <= paginator.total_page" :span="24" align="center">
         <a-space class="my-4">
@@ -428,16 +442,23 @@ watch(
       <div class="pt-6">
         <a-form ref="formRef" :model="form" @submit="handleSubmit" layout="vertical">
           <a-form-item
-            field="icon"
+            field="fileList"
             hide-label
             :rules="[{ required: true, message: '插件图标不能为空' }]"
           >
+            <!--
+              custom-request：接管上传动作。a-upload 默认会自己往 action 地址发请求，
+              这里改成调我们后端的 /upload-files/image，拿到返回的 image_url 存进 form.icon。
+            -->
             <a-upload
-              v-model="form.icon"
               :limit="1"
               list-type="picture-card"
               accept="image/png, image/jpeg"
               class="!w-auto mx-auto"
+              v-model:file-list="form.fileList"
+              image-preview
+              :custom-request="iconRequest"
+              :on-before-remove="iconRemove"
             />
           </a-form-item>
           <a-form-item

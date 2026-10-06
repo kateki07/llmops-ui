@@ -47,6 +47,18 @@ const router = createRouter({
             },
           ],
         },
+        // 知识库的「文档列表 / 新增文档」在左侧导航里，但不属于 space 的标签页，
+        // 所以挂在 DefaultLayout 下、space 之外
+        {
+          path: 'space/datasets/:dataset_id/documents',
+          name: 'space-datasets-documents-list',
+          component: () => import('@/views/space/datasets/documents/ListView.vue'),
+        },
+        {
+          path: 'space/datasets/:dataset_id/documents/create',
+          name: 'space-datasets-documents-create',
+          component: () => import('@/views/space/datasets/documents/CreateView.vue'),
+        },
         {
           path: 'store/apps',
           name: 'store-apps-list',

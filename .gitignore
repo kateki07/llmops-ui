@@ -37,3 +37,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# 环境变量（Vite 的 VITE_* 会被打进构建产物，绝对不能提交）
+.env
+.env.*
+!.env.example
