@@ -8,11 +8,10 @@ import { getDataset } from '@/services/dataset'
 import { uploadImage } from '@/services/upload-file'
 import { makeBeforeRemove, makeCustomRequest } from '@/utils/helper'
 import moment from 'moment'
-import type { ValidatedError } from '@arco-design/web-vue'
 import { useAccountStore } from '@/stores/account'
+import type { ValidatedError } from '@arco-design/web-vue'
 
 let updateDatasetID = ''
-const accountStore = useAccountStore()
 const props = defineProps({
   createType: {
     type: String,
@@ -20,6 +19,7 @@ const props = defineProps({
   },
 })
 const emits = defineEmits(['update-create-type'])
+const accountStore = useAccountStore()
 const { loading, datasets, paginator, loadDatasets } = useGetDatasetsWithPage()
 const {
   loading: submitLoading,
@@ -30,8 +30,9 @@ const {
   updateShowUpdateModal,
 } = useCreateOrUpdateDataset()
 const { handleDelete } = useDeleteDataset()
-// a-upload 的两个回调抽到 helper 里：内联 async 返回的是 Promise，
-// 而组件要求同步返回 UploadRequest，类型过不了
+
+// a-upload 的两个回调抽到 helper 里：组件要求同步返回 UploadRequest，
+// 内联的 async 返回的是 Promise，类型过不了
 const iconRequest = makeCustomRequest(
   uploadImage,
   (resp) => resp.data.image_url,
@@ -149,7 +150,7 @@ const handleSubmit = async ({ errors }: { errors: Record<string, ValidatedError>
             </div>
           </div>
           <!-- 知识库的描述信息 -->
-          <div class="leading-[18px] text-gray-500 h-[72px] line-clamp-4 mb-2">
+          <div class="leading-[18px] text-gray-500 h-[72px] line-clamp-4 mb-2 break-all">
             {{ dataset.description }}
           </div>
           <!-- 知识库的归属者信息 -->

@@ -1,12 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { type FormInstance, type ValidatedError } from '@arco-design/web-vue'
-import {
-  type ApiToolHeader,
-  type CreateApiToolProviderRequest,
-  type UpdateApiToolProviderRequest,
-} from '@/models/api-tool'
-import { useAccountStore } from '@/stores/account'
 import { useRoute } from 'vue-router'
 import {
   createApiToolProvider,
@@ -18,12 +11,24 @@ import {
 } from '@/services/api-tool'
 import { uploadImage } from '@/services/upload-file'
 import { makeBeforeRemove, makeCustomRequest } from '@/utils/helper'
+import { type CreateApiToolProviderRequest } from '@/models/api-tool'
 import moment from 'moment/moment'
+import { useAccountStore } from '@/stores/account'
 import { typeMap } from '@/config'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Form, Message, Modal, type ValidatedError } from '@arco-design/web-vue'
 
-const accountStore = useAccountStore()
 const route = useRoute()
+const accountStore = useAccountStore()
+
+// a-upload 的两个回调抽到 helper 里：组件要求同步返回 UploadRequest，
+// 内联的 async 返回的是 Promise，类型过不了
+const iconRequest = makeCustomRequest(
+  uploadImage,
+  (resp) => resp.data.image_url,
+  (url) => (form.icon = url),
+)
+const iconRemove = makeBeforeRemove(() => (form.icon = ''))
+
 const props = defineProps({
   createType: {
     type: String,
@@ -39,24 +44,14 @@ const paginator = reactive({
   total_record: 0,
 })
 const form = reactive({
-  // a-upload 的受控文件列表；icon 存上传成功后拿到的真实 URL
+  // 不标类型的话 TS 会把空数组推断成 never[]，后面往里塞对象就报错
   fileList: [] as { uid: string; name: string; url: string }[],
   icon: '',
   name: '',
   openapi_schema: '',
-  // 不标类型的话 TS 会把空数组推断成 never[]，后面 header.key 就报错
-  headers: [] as ApiToolHeader[],
+  headers: [] as { key: string; value: string }[],
 })
-const formRef = ref<FormInstance | null>(null)
-// a-upload 的两个回调抽到 helper 里：内联 async 返回的是 Promise，
-// 而组件要求同步返回 UploadRequest，类型过不了
-const iconRequest = makeCustomRequest(
-  uploadImage,
-  (resp) => resp.data.image_url,
-  (url) => (form.icon = url),
-)
-const iconRemove = makeBeforeRemove(() => (form.icon = ''))
-
+const formRef = ref<InstanceType<typeof Form>>()
 const showIdx = ref<number>(-1)
 const loading = ref<boolean>(false)
 const showUpdateModal = ref<boolean>(false)
@@ -90,9 +85,7 @@ const tools = computed(() => {
       }
     }
     return available_tools
-  } catch (e) {
-    console.log('解析openapi_schema出错')
-  }
+  } catch (e) {}
   return []
 })
 
@@ -210,8 +203,6 @@ const handleDelete = () => {
 }
 
 // 提交模态窗处理器
-// 参数签名由 ArcoDesign 的 a-form @submit 决定，不能自己收窄；
-// values 的真实形状就是上面的 form，所以在调用接口处再断言成具体类型。
 const handleSubmit = async ({
   values,
   errors,
@@ -235,7 +226,7 @@ const handleSubmit = async ({
       // 5.调用接口发起更新API工具请求
       const resp = await updateApiToolProvider(
         providers[showIdx.value]['id'],
-        values as UpdateApiToolProviderRequest,
+        values as CreateApiToolProviderRequest,
       )
       Message.success(resp.message)
     }
@@ -446,10 +437,6 @@ watch(
             hide-label
             :rules="[{ required: true, message: '插件图标不能为空' }]"
           >
-            <!--
-              custom-request：接管上传动作。a-upload 默认会自己往 action 地址发请求，
-              这里改成调我们后端的 /upload-files/image，拿到返回的 image_url 存进 form.icon。
-            -->
             <a-upload
               :limit="1"
               list-type="picture-card"

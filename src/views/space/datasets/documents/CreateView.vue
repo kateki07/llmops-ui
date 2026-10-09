@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { uploadFile } from '@/services/upload-file'
-import { createDocuments, getDocumentsStatus } from '@/services/dataset'
 import {
   type FileItem,
   type Form,
@@ -10,20 +8,23 @@ import {
   type RequestOption,
   type UploadRequest,
 } from '@arco-design/web-vue'
-import { type UploadFileResponse } from '@/models/upload-file'
+import { createDocuments, getDocumentsStatus } from '@/services/dataset'
+import { uploadFile } from '@/services/upload-file'
 import { unescapeString } from '@/utils/helper'
 import { type CreateDocumentsRequest } from '@/models/dataset'
+import { type UploadFileResponse } from '@/models/upload-file'
 
-// 1.定义页面逻辑基础数据，涵盖定时器、路由、当前步骤数、表单信息、接口加载状态
-let timer: ReturnType<typeof setInterval> | null = null // 定时器，默认为空
-let batch = '' // 批处理标识
+// 1.定义页面逻辑基础数据，涵盖定时器、路由、当前步骤书、表单信息等
+let timer: ReturnType<typeof setInterval> | null = null
+let batch = ''
+let fetchCount = 0
 const route = useRoute()
 const currentStep = ref(1)
 const createDocumentsForm = reactive({
   // 标上类型，否则 TS 推断成 never[]。FileItem 是 a-upload 自己的类型，
-  // 它的 response 字段是我们在 onSuccess(resp) 时挂上去的，就是接口原样返回的内容
-  file_list: [] as FileItem[], // 上传文件列表
-  process_type: 'automatic', // 处理类型
+  // 它的 response 是我们在 onSuccess(resp) 时挂上去的，就是接口原样返回的内容
+  file_list: [] as FileItem[],
+  process_type: 'automatic',
   rule: {
     separators: ['\\n'],
     chunk_size: 500,
@@ -34,15 +35,13 @@ const createDocumentsForm = reactive({
 const customRuleFormRef = ref<InstanceType<typeof Form>>()
 const createDocumentsLoading = ref(false)
 const documents = reactive<Array<any>>([])
-let fetchCount = 0
 
-// 文件上传的回调：组件要求同步返回 UploadRequest，所以异步的活儿包在里面跑
+// 文件上传：组件要求同步返回 UploadRequest，所以异步的活儿包在里面跑
 const fileRequest = (option: RequestOption): UploadRequest => {
   const { fileItem, onSuccess, onError } = option
   void (async () => {
     try {
-      const resp = await uploadFile(fileItem.file as File)
-      onSuccess(resp)
+      onSuccess(await uploadFile(fileItem.file as File))
     } catch (e) {
       onError(e)
     }
@@ -52,16 +51,17 @@ const fileRequest = (option: RequestOption): UploadRequest => {
 
 // 2.定义下一步处理函数
 const nextStep = async () => {
-  // 2.1 判断当前所处的步骤并执行不同的检查
+  // 2.1 判断下当前所处的步骤并执行不同的操作
   if (currentStep.value === 1) {
-    // 2.2 检查是否已经上传了文件，如果没上传则不允许点击下一步并提示
+    // 2.2 检查是否已经上传了文件，如果没上传则不允许点击下一步
     if (createDocumentsForm.file_list.length === 0) {
-      Message.error('请上传需要处理的文件')
+      Message.error('请上传需要添加到知识库的文件')
       return
     }
-    // 2.3检查文件是否上传完毕
+
+    // 2.3 检查所有文件是否全部上传完成
     const isUploaded = createDocumentsForm.file_list.every(
-      (fileItem) => (fileItem.response as UploadFileResponse)?.data?.id,
+      (fileItem) => fileItem.response?.data?.id,
     )
     if (!isUploaded) {
       Message.warning('文件正在上传中，请稍等')
@@ -71,16 +71,16 @@ const nextStep = async () => {
     // 2.4 进入下一步
     currentStep.value++
   } else {
-    // 2.4 当前处于第2页，判断对应的表单逻辑是否正确
+    // 2.5 当前处于第2页，需要根据不同的处理类型执行不同的操作
     if (createDocumentsForm.process_type === 'custom') {
-      // 2.5 校验表单数据监测是否出错，如果出错则停止程序
+      // 2.6 校验表单数据监测是否出错
       const errors = await customRuleFormRef.value?.validate()
       if (errors) return
     }
 
-    // 2.6 如果校验成功或者是自动规则，则继续后续的步骤
+    // 2.7 如果校验成功或者是自动规则，则执行下一步
     try {
-      // 2.7 将加载状态设置为true并处理请求数据
+      // 2.8 将加载状态设置为true，并将表单数据转换成api接口数据
       createDocumentsLoading.value = true
       const req: CreateDocumentsRequest = {
         upload_file_ids: createDocumentsForm.file_list.map(
@@ -89,9 +89,8 @@ const nextStep = async () => {
         process_type: createDocumentsForm.process_type,
       }
 
-      // 2.8 如果处理类型为自定义，则添加上处理规则
+      // 2.9 如果处理类型为自定义，则需要添加上自定义规则
       if (createDocumentsForm.process_type === 'custom') {
-        // 处理转义的分隔符为非转义数据
         req.rule = {
           pre_process_rules: [
             {
@@ -113,15 +112,15 @@ const nextStep = async () => {
         }
       }
 
-      // 2.8 发起请求并获取预处理批次
+      // 2.10 发起请求并获取数据
       const resp = await createDocuments(route.params?.dataset_id as string, req)
       batch = resp.data.batch
 
-      // 2.9 先调用一次获取文档状态数据，然后创建定时器
-      await fetDocumentsStatus()
+      // 2.11 先调用一次获取文档状态，然后创建定时器
+      await fetchDocumentsStatus()
       startTimer()
 
-      // 创建文档列表预处理成功，步骤+1
+      // 2.12 创建文档预处理成功，当前步骤数+1
       currentStep.value++
     } finally {
       createDocumentsLoading.value = false
@@ -129,8 +128,8 @@ const nextStep = async () => {
   }
 }
 
-// 3.定义获取文档状态函数
-const fetDocumentsStatus = async () => {
+// 3.定义获取文档状态数据函数
+const fetchDocumentsStatus = async () => {
   // 3.1 调用接口获取文档状态数据
   fetchCount++
   const resp = await getDocumentsStatus(route.params?.dataset_id as string, batch)
@@ -139,20 +138,20 @@ const fetDocumentsStatus = async () => {
   // 3.2 同步文档状态信息
   documents.splice(0, documents.length, ...data)
 
-  // 3.3 如果请求次数超过限制则停止
+  // 3.3 如果请求次数超过限制，则停止
   if (fetchCount >= 30) stopTimer()
 
-  // 3.4 如果文档都处理完毕（处理完成或者出错）则停止
+  // 3.4 如果文档全部都处理完成（涵盖处理完成+错误），则停止
   const isCompleted = data.every(
     (document) => document.status === 'completed' || document.status === 'error',
   )
   if (isCompleted) stopTimer()
 }
 
-// 5.定义开始定时器函数
-const startTimer = () => (timer = setInterval(fetDocumentsStatus, 5000))
+// 4.定义开始定时器函数
+const startTimer = () => (timer = setInterval(fetchDocumentsStatus, 5000))
 
-// 6.定义停止定时器函数
+// 5.停止定时器函数
 const stopTimer = () => {
   if (timer) {
     clearInterval(timer)
@@ -160,13 +159,8 @@ const stopTimer = () => {
   }
 }
 
-// 7.页面卸载时同步卸载定时器
-onUnmounted(() => {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
-})
+// 6.页面卸载时同步卸载定时器
+onUnmounted(() => stopTimer())
 </script>
 
 <template>
@@ -236,6 +230,7 @@ onUnmounted(() => {
               <a-form-item
                 field="separators"
                 label="分段标识符"
+                required
                 asterisk-position="end"
                 :rules="[{ required: true, message: '分段标识符不能为空' }]"
               >
@@ -265,7 +260,7 @@ onUnmounted(() => {
                 label="块重叠数"
                 required
                 asterisk-position="end"
-                :rules="[{ required: true, message: '块重叠数不能为空' }]"
+                :rules="[{ required: true, message: '块重叠大小不能为空' }]"
               >
                 <a-input-number
                   v-model:model-value="createDocumentsForm.rule.chunk_overlap"
@@ -313,9 +308,9 @@ onUnmounted(() => {
               </div>
             </div>
             <!-- 处理的百分比 -->
-            <div v-if="document.status === 'completed'" class="text-gray-500">处理完成</div>
-            <div v-else-if="document.status === 'error'" class="text-red-700">处理出错</div>
-            <div v-else-if="document.segment_count === 0" class="text-gray-500">0%</div>
+            <div v-if="document.segment_count === 0" class="text-gray-500">0.00%</div>
+            <div v-else-if="document.status === 'error'" class="">处理出错</div>
+            <div v-else-if="document.status === 'completed'" class="">处理完成</div>
             <div v-else class="text-gray-500">
               {{ ((document.completed_segment_count / document.segment_count) * 100).toFixed(2) }}%
             </div>
@@ -328,7 +323,7 @@ onUnmounted(() => {
       <div class=""></div>
       <div class="flex items-center gap-2">
         <a-button
-          v-if="currentStep == 2"
+          v-if="currentStep === 2"
           class="rounded-lg"
           @click="
             () => {

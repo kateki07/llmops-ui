@@ -34,26 +34,24 @@ const send = async () => {
     query.value = ''
     isLoading.value = true
 
-    // 先占一条空的 AI 消息，后面流式内容往这一条上拼
     messages.value.push({
       role: 'ai',
       content: '',
     })
 
     await debugApp(route.params.app_id as string, humanQuery, (event_response) => {
-      // 1.提取事件名与数据
+      // 1.提取流式事件响应数据以及事件名称
       const event = event_response?.event
       const data = event_response?.data
 
-      // 2.拿到刚才占位的那条消息
+      // 2.获取最后一条消息
       const lastIndex = messages.value.length - 1
-      const message = messages.value[lastIndex]
+      let message = messages.value[lastIndex]
 
-      // todo: 3.目前只处理 agent_message（LLM 吐字），
-      //       其他事件（工具调用、长期记忆等）等后端接口补齐后再加
+      // todo: 3.暂时只处理agent_message事件，其他事件类型等接口开发完毕后添加
       if (event === 'agent_message') {
-        const chunk_content = data?.data
-        messages.value[lastIndex].content = message.content + chunk_content
+        // let chunk_content = data?.data
+        messages.value[lastIndex].content = message.content + data.answer
       }
     })
   } finally {
@@ -92,7 +90,7 @@ const send = async () => {
         <!-- 调试对话界面 -->
         <div class="h-full min-h-0 px-6 py-7 overflow-x-hidden overflow-y-scroll scrollbar-w-none">
           <!-- 人类消息 -->
-          <div class="flex flex-row gap-2 mb-6" v-for="(message, index) in messages" :key="index">
+          <div class="flex flex-row gap-2 mb-6" v-for="message in messages" :key="message.content">
             <!-- 头像 -->
             <a-avatar
               v-if="message.role === 'human'"
@@ -100,7 +98,7 @@ const send = async () => {
               class="flex-shrink-0"
               :size="30"
             >
-              {{ accountStore.account.name.charAt(0) }}
+              慕
             </a-avatar>
             <a-avatar
               v-else
@@ -126,8 +124,7 @@ const send = async () => {
                 class="max-w-max bg-gray-100 text-gray-900 border border-gray-200 px-4 py-3 rounded-2xl leading-5"
               >
                 {{ message.content }}
-                <!-- 正在生成时末尾跟一个闪烁光标，只跟最后一条 -->
-                <div v-if="isLoading && index === messages.length - 1" class="cursor"></div>
+                <div v-if="isLoading" class="cursor"></div>
               </div>
             </div>
           </div>
@@ -180,7 +177,6 @@ const send = async () => {
 </template>
 
 <style scoped>
-/* 闪烁光标：模拟「还在打字」 */
 .cursor {
   display: inline-block;
   width: 1px;
@@ -193,10 +189,10 @@ const send = async () => {
 @keyframes blink {
   0%,
   100% {
-    opacity: 1;
+    opacity: 1; /* 显示 */
   }
   50% {
-    opacity: 0;
+    opacity: 0; /* 隐藏 */
   }
 }
 </style>

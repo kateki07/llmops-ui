@@ -1,18 +1,35 @@
 import { Message } from '@arco-design/web-vue'
 import { apiPrefix, httpCode } from '@/config'
+import { useCredentialStore } from '@/stores/credential'
+import router from '@/router'
 
 // 1.超时时间 100s
 const TIME_OUT = 100000
 
 // 2.基础配置（注意都是 fetch 规定的小写键名）
-const baseFetchOptions: RequestInit = {
+const baseFetchOptions: Omit<RequestInit, 'headers'> = {
   method: 'GET',
   mode: 'cors',
   credentials: 'include',
-  headers: new Headers({
-    'Content-Type': 'application/json',
-  }),
   redirect: 'follow',
+}
+
+/**
+ * 每次请求新建一份请求头，并带上授权凭证。
+ *
+ * 为什么不把 Headers 放在 baseFetchOptions 里共享：Object.assign 是浅拷贝，
+ * 共享的那一个 Headers 实例被 set('Authorization') 之后就一直带着旧 token，
+ * 退出登录也清不掉。
+ */
+const buildHeaders = (extra?: HeadersInit): Headers => {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  if (extra) new Headers(extra).forEach((v, k) => headers.set(k, v))
+
+  const { credential } = useCredentialStore()
+  const access_token = credential.access_token
+  if (access_token) headers.set('Authorization', `Bearer ${access_token}`)
+
+  return headers
 }
 
 // 3.fetch 参数类型：在原生 RequestInit 上，允许 body 传对象、并支持 params
@@ -25,6 +42,7 @@ type FetchOptionType = Omit<RequestInit, 'body'> & {
 const baseFetch = <T>(url: string, fetchOptions: FetchOptionType): Promise<T> => {
   // 5.把默认配置和调用方传的配置合并
   const options: FetchOptionType = Object.assign({}, baseFetchOptions, fetchOptions)
+  options.headers = buildHeaders(fetchOptions.headers)
 
   // 6.组装 url
   let urlWithPrefix = `${apiPrefix}${url.startsWith('/') ? url : `/${url}`}`
@@ -67,6 +85,11 @@ const baseFetch = <T>(url: string, fetchOptions: FetchOptionType): Promise<T> =>
           const json = await res.json()
           if (json.code === httpCode.success) {
             resolve(json)
+          } else if (json.code === httpCode.unauthorized) {
+            // 凭证过期或无效：清掉本地凭证并回登录页
+            useCredentialStore().clear()
+            await router.replace({ path: '/auth/login' })
+            reject(new Error(json.message))
           } else {
             // 业务失败：弹一个提示，同时把错误抛给调用方
             Message.error(json.message)
@@ -115,6 +138,7 @@ export const ssePost = async (
 ) => {
   // 1.组装配置，SSE 固定用 POST
   const options: FetchOptionType = Object.assign({}, baseFetchOptions, { method: 'POST' }, fetchOptions)
+  options.headers = buildHeaders(fetchOptions.headers)
 
   // 2.组装请求 URL
   const urlWithPrefix = `${apiPrefix}${url.startsWith('/') ? url : `/${url}`}`
@@ -212,10 +236,15 @@ export const upload = <T>(url: string, options: UploadOptions = {}): Promise<T> 
     headers: {},
     data: null,
   }
+  const { credential } = useCredentialStore()
   const merged: UploadOptions = {
     ...defaultOptions,
     ...options,
     headers: { ...defaultOptions.headers, ...options.headers },
+  }
+  // 文件上传不走 fetch，授权头要单独加
+  if (credential.access_token) {
+    merged.headers = { ...merged.headers, Authorization: `Bearer ${credential.access_token}` }
   }
 
   // 3.用 xhr 完成上传
