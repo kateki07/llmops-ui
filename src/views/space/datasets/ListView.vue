@@ -19,7 +19,6 @@ const props = defineProps({
   },
 })
 const emits = defineEmits(['update-create-type'])
-const accountStore = useAccountStore()
 const { loading, datasets, paginator, loadDatasets } = useGetDatasetsWithPage()
 const {
   loading: submitLoading,
@@ -30,6 +29,7 @@ const {
   updateShowUpdateModal,
 } = useCreateOrUpdateDataset()
 const { handleDelete } = useDeleteDataset()
+const accountStore = useAccountStore()
 
 // a-upload 的两个回调抽到 helper 里：组件要求同步返回 UploadRequest，
 // 内联的 async 返回的是 Promise，类型过不了

@@ -163,57 +163,81 @@ export const ssePost = async (
  * 关键点：网络包的切分和「行」的切分完全没关系，一个 data: 行可能被切成两半分两次到。
  * 所以必须用 buffer 攒着，每次只处理「已经完整的行」，最后一行（可能是半截）留着下次拼。
  */
-const handleStream = (response: Response, onData: (data: SSEEvent) => void) => {
-  // 1.检测网络请求是否正常
-  if (!response.ok) throw new Error('网络请求失败')
+/**
+ * 读取 SSE 响应流，返回一个在「流结束」时 resolve 的 Promise。
+ *
+ * 为什么要返回 Promise（第10周加的）：调用方要知道「生成完了」才能把
+ * isLoading 关掉、把发送按钮恢复。不返回 Promise 的话，ssePost 一发出去
+ * 就 resolve 了，调用方根本不知道什么时候结束。
+ *
+ * SSE 的报文格式是固定的三行一组：
+ *     event: agent_message
+ *     data: {"id": "...", "data": "你"}
+ *     （空行 —— 这一组结束）
+ *
+ * 关键点：网络包的切分和「行」的切分完全没关系，一个 data: 行可能被切成两半分两次到。
+ * 所以必须用 buffer 攒着，每次只处理「已经完整的行」，最后一行（可能是半截）留着下次拼。
+ */
+const handleStream = (response: Response, onData: (data: SSEEvent) => void): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    // 1.检测网络请求是否正常
+    if (!response.ok) {
+      reject(new Error('网络请求失败'))
+      return
+    }
 
-  // 2.构建 reader 与 decoder（stream: true 表示可能有被切断的多字节字符，先攒着）
-  const reader = response.body?.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
+    // 2.构建 reader 与 decoder（stream: true 表示可能有被切断的多字节字符，先攒着）
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
 
-  // 3.递归读取
-  const read = () => {
-    let hasError = false
-    reader?.read().then((result) => {
-      if (result.done) return
+    // 3.递归读取
+    const read = () => {
+      reader?.read().then((result) => {
+        if (result.done) {
+          resolve() // ← 流读完了，通知调用方
+          return
+        }
 
-      buffer += decoder.decode(result.value, { stream: true })
-      const lines = buffer.split('\n')
+        buffer += decoder.decode(result.value, { stream: true })
+        const lines = buffer.split('\n')
 
-      let event = ''
-      let data = ''
+        let event = ''
+        let data = ''
 
-      try {
-        lines.forEach((line) => {
-          line = line.trim()
-          if (line.startsWith('event:')) {
-            event = line.slice(6).trim()
-          } else if (line.startsWith('data:')) {
-            data = line.slice(5).trim()
-          }
-
-          // 空行代表一组事件结束；event 和 data 都齐了才算拿到一次完整事件
-          if (line === '') {
-            if (event !== '' && data !== '') {
-              onData({ event, data: JSON.parse(data) })
-              event = ''
-              data = ''
+        try {
+          lines.forEach((line) => {
+            line = line.trim()
+            if (line.startsWith('event:')) {
+              event = line.slice(6).trim()
+            } else if (line.startsWith('data:')) {
+              data = line.slice(5).trim()
             }
-          }
-        })
-        // 最后一行可能是被切断的半截，留到下一次 read 再拼
-        buffer = lines.pop() || ''
-      } catch (e) {
-        hasError = true
-      }
 
-      if (!hasError) read()
-    })
-  }
+            // 空行代表一组事件结束；event 和 data 都齐了才算拿到一次完整事件
+            if (line === '') {
+              if (event !== '' && data !== '') {
+                onData({ event, data: JSON.parse(data) })
+                event = ''
+                data = ''
+              }
+            }
+          })
+          // 最后一行可能是被切断的半截，留到下一次 read 再拼
+          buffer = lines.pop() || ''
+        } catch (e) {
+          // 出错就停下，不再往下读（老师的版本 reject 之后还会继续 read）
+          reject(e)
+          return
+        }
 
-  // 4.启动读取
-  read()
+        read()
+      }).catch(reject)
+    }
+
+    // 4.启动读取
+    read()
+  })
 }
 
 // 文件上传的配置：用 xhr 而不是 fetch，是因为只有 xhr 能拿到上传进度

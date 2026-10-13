@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "autoprefixer": "^10.5.5",
+    "lodash": "^4.18.1",
     "moment": "^2.31.0",
     "pinia": "^4.0.2",
     "postcss": "^8.5.28",
@@ -27,6 +28,7 @@
     "@arco-design/web-vue": "^2.58.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.3",
+    "@types/lodash": "^4.17.25",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitest/eslint-plugin": "^1.6.23",

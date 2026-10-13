@@ -39,9 +39,7 @@ const updateAccount = async () => {
 }
 
 /**
- * 头像上传。
- *
- * a-upload 的 :custom-request 要求同步返回 UploadRequest，而上传是异步的，
+ * 头像上传。a-upload 要求同步返回 UploadRequest，而上传是异步的，
  * 写成内联 async 返回的是 Promise，类型过不了。所以同步返回，异步在里面跑。
  * 三步：上传图片拿 url → 调接口更新头像 → 重新拉一次账号信息刷新 store。
  */
