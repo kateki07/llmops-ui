@@ -299,8 +299,7 @@ const handleSelectTool = async (provider_idx: number, tool_idx: number) => {
 }
 
 // 9.定义是否关联工具判断函数
-// 模板里传进来的是 Record<string, any>（内置工具和 API 工具两种形状），
-// 这里只用到 name，收窄成宽松类型即可
+// 模板里传进来的是 Record<string, any>（内置工具和 API 工具两种形状），这里只用到 name
 const isToolSelected = (provider: Record<string, any>, tool: Record<string, any>) => {
   return props.tools.some(
     (item) => item.provider.name === provider.name && item.tool.name === tool.name,
@@ -539,7 +538,7 @@ const isToolSelected = (provider: Record<string, any>, tool: Record<string, any>
           class="flex flex-col flex-shrink-0 bg-gray-50 w-[200px] h-full px-3 py-4 overflow-scroll scrollbar-w-none"
         >
           <!-- 标题 -->
-          <div class="text-gray-900 font-bold text-lg mb-4">添加插件</div>
+          <div class="text-gray-900 font-bold text-lg mb-4">关联插件</div>
           <!-- 添加插件按钮 -->
           <router-link :to="{ name: 'space-tools-list' }">
             <a-button long type="primary" class="rounded-lg mb-5">创建自定义插件</a-button>

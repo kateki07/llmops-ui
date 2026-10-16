@@ -147,8 +147,18 @@ export const ssePost = async (
   const { body } = fetchOptions
   if (body) options.body = JSON.stringify(body)
 
-  // 4.发起请求，然后交给 handleStream 一段段读
+  // 4.发起请求
   const response = await globalThis.fetch(urlWithPrefix, options as RequestInit)
+
+  // 5.先看响应类型：如果后端返回的是 JSON，说明这次请求出错了（校验失败、401 等），
+  //   直接把错误内容返回，不要硬当成事件流去解析 —— 否则 handleStream 会读到一堆
+  //   不符合 SSE 格式的内容，既解析不出来也不报错，表现为「点了没反应」。
+  const contentType = response.headers.get('Content-Type')
+  if (contentType && contentType.includes('application/json')) {
+    return await response.json()
+  }
+
+  // 6.正常的事件流，交给 handleStream 一段段读
   return handleStream(response, onData)
 }
 
@@ -191,6 +201,12 @@ const handleStream = (response: Response, onData: (data: SSEEvent) => void): Pro
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
 
+    // ★ event / data 必须声明在 read() 外面（第12周老师修的一个真 bug）。
+    //   一个事件可能跨两次 read()：第一次只读到 "event: xxx"，第二次才读到 "data: ..."。
+    //   声明在 then() 里面的话，第二次开始时 event 被重置成空串，那一条事件就被丢掉了。
+    let event = ''
+    let data = ''
+
     // 3.递归读取
     const read = () => {
       reader?.read().then((result) => {
@@ -202,8 +218,6 @@ const handleStream = (response: Response, onData: (data: SSEEvent) => void): Pro
         buffer += decoder.decode(result.value, { stream: true })
         const lines = buffer.split('\n')
 
-        let event = ''
-        let data = ''
 
         try {
           lines.forEach((line) => {

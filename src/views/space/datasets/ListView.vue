@@ -6,7 +6,6 @@ import {
 } from '@/hooks/use-dataset'
 import { getDataset } from '@/services/dataset'
 import { uploadImage } from '@/services/upload-file'
-import { makeBeforeRemove, makeCustomRequest } from '@/utils/helper'
 import moment from 'moment'
 import { useAccountStore } from '@/stores/account'
 import type { ValidatedError } from '@arco-design/web-vue'
@@ -31,16 +30,6 @@ const {
 const { handleDelete } = useDeleteDataset()
 const accountStore = useAccountStore()
 
-// a-upload 的两个回调抽到 helper 里：组件要求同步返回 UploadRequest，
-// 内联的 async 返回的是 Promise，类型过不了
-const iconRequest = makeCustomRequest(
-  uploadImage,
-  (resp) => resp.data.image_url,
-  (url) => (form.icon = url),
-)
-const iconRemove = makeBeforeRemove(() => (form.icon = ''))
-
-
 // 滚动数据分页处理器
 const handleScroll = async (event: UIEvent) => {
   // 1.获取滚动距离、可滚动的最大距离、客户端/浏览器窗口的高度
@@ -48,9 +37,7 @@ const handleScroll = async (event: UIEvent) => {
 
   // 2.判断是否滑动到底部
   if (scrollTop + clientHeight >= scrollHeight - 10) {
-    if (loading.value) {
-      return
-    }
+    if (loading.value) return
     await loadDatasets()
   }
 }
@@ -222,8 +209,32 @@ const handleSubmit = async ({ errors }: { errors: Record<string, ValidatedError>
               class="!w-auto mx-auto"
               v-model:file-list="form.fileList"
               image-preview
-              :custom-request="iconRequest"
-              :on-before-remove="iconRemove"
+              :custom-request="
+                (option) => {
+                  // 1.从option中获取数据
+                  const { fileItem, onSuccess, onError } = option
+
+                  // 2.使用普通异步函数完成上传
+                  const uploadTask = async () => {
+                    try {
+                      const resp = await uploadImage(fileItem.file as File)
+                      form.icon = resp.data.image_url
+                      onSuccess(resp)
+                    } catch (error) {
+                      onError(error)
+                    }
+                  }
+                  uploadTask()
+
+                  return { abort: () => {} }
+                }
+              "
+              :on-before-remove="
+                async () => {
+                  form.icon = ''
+                  return true
+                }
+              "
             />
           </a-form-item>
           <a-form-item

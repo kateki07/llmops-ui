@@ -124,8 +124,7 @@ export const useCreateOrUpdateDataset = () => {
   // 1.定义新增和更新需要使用的数据
   const loading = ref(false)
   const defaultForm = {
-    // 不标类型的话 TS 会把空数组推断成 never[]
-    fileList: [] as { uid: string; name: string; url: string }[],
+    fileList: [] as any,
     icon: '',
     name: '',
     description: '',
