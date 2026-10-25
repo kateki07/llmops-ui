@@ -262,6 +262,23 @@ const addNode = (node_type: string) => {
 }
 
 // 定义监听工作流变化事件（涵盖节点+边）
+// VueFlow 改动节点/边时回传新数组，这里既落到本地状态，也顺手触发草稿保存。
+//
+// 模板里这两个是拆开写的（:nodes + @update:nodes），没有用 v-model:nodes。
+// 原因：nodes 的类型是 Record<string, any>[]，和 VueFlow 的 Node[] 对不上，
+// 读的一侧要写 (nodes as any)；而 v-model 会把表达式同时当成赋值目标，
+// 生成 (nodes as any) = $event，生产构建直接报 Cannot assign to this expression
+// —— dev 模式不报，只有 npm run build 才暴露。
+const onNodesChange = (value: any) => {
+  nodes.value = value
+  onChange()
+}
+
+const onEdgesChange = (value: any) => {
+  edges.value = value
+  onChange()
+}
+
 const onChange = () => {
   // 检测是否初始化，如果是则直接中断程序
   if (isInitializing.value) return
@@ -478,10 +495,10 @@ onMounted(async () => {
         :connection-mode="ConnectionMode.Strict"
         :connection-line-options="{ style: { strokeWidth: 2, stroke: '#9ca3af' } }"
         :node-types="NOTE_TYPES"
-        v-model:nodes="(nodes as any)"
-        v-model:edges="(edges as any)"
-        @update:nodes="onChange"
-        @update:edges="onChange"
+        :nodes="(nodes as any)"
+        :edges="(edges as any)"
+        @update:nodes="onNodesChange"
+        @update:edges="onEdgesChange"
       >
         <!-- 工作流背景 -->
         <background />

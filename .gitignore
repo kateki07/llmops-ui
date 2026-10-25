@@ -42,3 +42,6 @@ __screenshots__/
 .env
 .env.*
 !.env.example
+
+# 本项目统一用 npm（package-lock.json），不要再生成 yarn.lock
+yarn.lock

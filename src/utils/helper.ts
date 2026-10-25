@@ -96,7 +96,7 @@ export const getPredecessorsByNodeId = (
 export const getReferencedVariables = (
   nodes: GraphNode[],
   edges: GraphEdge[],
-  target_node_id: string,   // 老师这里写成了 Python 的 str
+  target_node_id: string,
 ): Record<string, any>[] => {
   // 2.1 构建逆邻接表
   const reverseAdjList = buildReverseAdjList(edges)
@@ -108,24 +108,22 @@ export const getReferencedVariables = (
   const predecessorNodes = nodes.filter((node) => predecessors.includes(node.id))
 
   // 2.4 遍历节点，提取输出数据变量列表
-  // 不标类型的话 TS 会推断成 never[]，后面 push 对象就报错
-  type VarOption = { label: string; value: string }
-  const options: { isGroup: boolean; label: string; options: VarOption[] }[] = []
+  const options: any[] = []
   predecessorNodes.forEach((node) => {
     // 2.5 创建节点变量列表
     const node_variables = {
       isGroup: true,
       label: node.data.title,
-      options: [] as VarOption[],
+      options: [] as any,
     }
 
     // 2.6 根据节点的差异取出可以引用的数据
     if (node.type === 'start') {
-      node.data?.inputs.forEach((variable: { name: string }) => {
+      node.data?.inputs.forEach((variable: any) => {
         node_variables.options.push({ label: variable.name, value: `${node.id}/${variable.name}` })
       })
     } else {
-      node.data?.outputs.forEach((variable: { name: string }) => {
+      node.data?.outputs.forEach((variable: any) => {
         node_variables.options.push({
           label: `${variable.name}`,
           value: `${node.id}/${variable.name}`,
