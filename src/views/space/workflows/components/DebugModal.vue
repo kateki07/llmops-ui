@@ -23,7 +23,7 @@ const {
 // 2.输入变量列表动态计算函数
 const inputs = computed(() => {
   // 2.1 获取节点数据中的开始节点
-  const startNode = nodes.value.find((item: Record<string, any>) => item.type === 'start')
+  const startNode = nodes.value.find((item) => item.type === 'start')
 
   // 2.2 检查节点数据并返回
   return startNode?.data?.inputs ?? []
@@ -32,7 +32,7 @@ const inputs = computed(() => {
 // 3.定义输出结果动态计算函数
 const outputs = computed(() => {
   // 3.1 获取结束节点数据
-  const endNodeResult = nodeResults.value.find((item: Record<string, any>) => item.node_data.node_type === 'end')
+  const endNodeResult = nodeResults.value.find((item) => item.node_data.node_type === 'end')
 
   // 3.2 如果存在则表示运行成功
   if (endNodeResult) return endNodeResult.outputs

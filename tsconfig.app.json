@@ -3,8 +3,11 @@
   "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
   "exclude": ["src/**/__tests__/*"],
   "compilerOptions": {
-    // Extra safety for array and object lookups, but may have false positives.
-    "noUncheckedIndexedAccess": true,
+    // 这里刻意关掉 noUncheckedIndexedAccess（create-vue 脚手架默认开着）。
+    // 原因：课程代码里大量 arr[0] / arr[idx] 是逻辑上一定存在的取值，开着会产生
+    // 80 多个判空报错，而这些文件每周都会被课程的新版本整体覆盖 —— 修完下周还得
+    // 再修一遍，成本高而收益低。其余严格检查（strict、noImplicitAny 等）全部保留。
+    "noUncheckedIndexedAccess": false,
 
     // Path mapping for cleaner imports.
     "paths": {

@@ -88,7 +88,15 @@ const baseFetch = <T>(url: string, fetchOptions: FetchOptionType): Promise<T> =>
           } else if (json.code === httpCode.unauthorized) {
             // 凭证过期或无效：清掉本地凭证并回登录页
             useCredentialStore().clear()
-            await router.replace({ path: '/auth/login' })
+            await router.replace({ name: 'auth-login' })
+            reject(new Error(json.message))
+          } else if (json.code === httpCode.notFound) {
+            // 资源不存在：跳到 404 页（第14周新增）
+            await router.push({ name: 'errors-not-found' })
+            reject(new Error(json.message))
+          } else if (json.code === httpCode.forbidden) {
+            // 没有权限：跳到 403 页（第14周新增）
+            await router.push({ name: 'errors-forbidden' })
             reject(new Error(json.message))
           } else {
             // 业务失败：弹一个提示，同时把错误抛给调用方

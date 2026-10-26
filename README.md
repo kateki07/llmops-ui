@@ -26,29 +26,49 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 ## Project Setup
 
 ```sh
-yarn
+npm install
 ```
 
 ### Compile and Hot-Reload for Development
 
 ```sh
-yarn dev
+npm run dev
 ```
 
 ### Type-Check, Compile and Minify for Production
 
 ```sh
-yarn build
+npm run build
 ```
 
 ### Run Unit Tests with [Vitest](https://vitest.dev/)
 
 ```sh
-yarn test:unit
+npm run test:unit
 ```
 
 ### Lint with [ESLint](https://eslint.org/)
 
 ```sh
-yarn lint
+npm run lint
 ```
+
+### Build and Run with Docker
+
+```sh
+docker build -t llmops-ui:0.1.0 .
+docker run -p 5173:80 llmops-ui:0.1.0
+```
+
+Or, from the repository root, build it together with the rest of the stack:
+
+```sh
+docker compose -f ../docker/docker-compose.yaml up --build
+```
+
+### Environment Variables
+
+`.env` holds the page title, `.env.development` and `.env.production` hold the
+backend address for each mode. None of them contain secrets — Vite inlines every
+`VITE_*` value into the build output, so nothing sensitive can live here. Put
+local overrides in `.env.local`, which is git-ignored.

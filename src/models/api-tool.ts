@@ -1,4 +1,4 @@
-import { type BaseResponse, type BasePaginatorResponse } from '@/models/base'
+import { type BasePaginatorResponse, type BaseResponse } from '@/models/base'
 
 // 获取自定义API插件响应接口
 export type GetApiToolProvidersWithPageResponse = BasePaginatorResponse<{
@@ -27,20 +27,13 @@ export type UpdateApiToolProviderRequest = {
   headers: Array<any>
 }
 
-// 请求头的键值对
-export type ApiToolHeader = {
-  key: string
-  value: string
-}
-
 // 获取自定义API工具提供者响应结构体
-// 注意要包一层 BaseResponse —— 接口返回的永远是 { code, message, data }
 export type GetApiToolProviderResponse = BaseResponse<{
   id: string
   name: string
   icon: string
   openapi_schema: string
-  headers: ApiToolHeader[]
+  headers: Array<any>
   created_at: number
 }>
 
@@ -53,7 +46,7 @@ export type GetApiToolResponse = BaseResponse<{
     id: string
     name: string
     icon: string
-    headers: ApiToolHeader[]
+    headers: { key: string; value: string }[]
     description: string
   }
   inputs: {

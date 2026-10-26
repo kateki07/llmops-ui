@@ -171,11 +171,8 @@ export const useDeleteWorkflow = () => {
 export const useGetDraftGraph = () => {
   // 1.定义hooks所需数据
   const loading = ref(false)
-  // 泛型要写成数组类型（老师写成了 Record<string, any>，但初始值是 []）。
-  // 这里不用 VueFlow 自己的 Node / Edge 类型：后端的边多带了 source_type /
-  // target_handle_id 等字段，Edge 那个联合类型不收，硬套反而要到处断言。
-  const nodes = ref<Record<string, any>[]>([])
-  const edges = ref<Record<string, any>[]>([])
+  const nodes = ref<any[]>([])
+  const edges = ref<any[]>([])
 
   // 2.定义加载数据函数
   const loadDraftGraph = async (workflow_id: string) => {

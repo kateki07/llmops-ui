@@ -38,10 +38,13 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 
-# 环境变量（Vite 的 VITE_* 会被打进构建产物，绝对不能提交）
-.env
-.env.*
-!.env.example
+# 环境变量。
+# 注意：Vite 的 VITE_* 会被打进构建产物，所以这里本来就放不了任何密钥 ——
+# 前端的 .env / .env.development / .env.production 只有标题和后端地址，
+# 没有秘密可言，而且不提交的话别人 clone 下来根本构建不出正确的产物，
+# 所以按 Vite 官方约定，只忽略本地覆盖文件。
+.env.local
+.env.*.local
 
 # 本项目统一用 npm（package-lock.json），不要再生成 yarn.lock
 yarn.lock

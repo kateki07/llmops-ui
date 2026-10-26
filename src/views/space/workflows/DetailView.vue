@@ -170,7 +170,7 @@ const {
   handleUpdateDraftGraph,
   convertGraphToReq,
 } = useUpdateDraftGraph()
-const { loading: getDraftGraphLoading, nodes, edges, loadDraftGraph } = useGetDraftGraph()
+const { nodes, edges, loadDraftGraph } = useGetDraftGraph()
 const { loading: publishWorkflowLoading, handlePublishWorkflow } = usePublishWorkflow()
 const { handleCancelPublish } = useCancelPublishWorkflow()
 
@@ -221,13 +221,13 @@ const addNode = (node_type: string) => {
   // 3.1 检测点击的类型是否为start/end，一个工作流中只允许有一个start和一个node
   if (node_type === 'start') {
     // 3.2 判断在图中是否存在开始节点
-    if (allNodes.value.some((node: Record<string, any>) => node.type === 'start')) {
+    if (allNodes.value.some((node) => node.type === 'start')) {
       Message.error('工作流中只允许有一个开始节点')
       return
     }
   } else if (node_type === 'end') {
     // 3.3 判断在图中是否存在结束节点
-    if (allNodes.value.some((node: Record<string, any>) => node.type === 'end')) {
+    if (allNodes.value.some((node) => node.type === 'end')) {
       Message.error('工作流中只允许有一个结束节点')
       return
     }
@@ -262,23 +262,6 @@ const addNode = (node_type: string) => {
 }
 
 // 定义监听工作流变化事件（涵盖节点+边）
-// VueFlow 改动节点/边时回传新数组，这里既落到本地状态，也顺手触发草稿保存。
-//
-// 模板里这两个是拆开写的（:nodes + @update:nodes），没有用 v-model:nodes。
-// 原因：nodes 的类型是 Record<string, any>[]，和 VueFlow 的 Node[] 对不上，
-// 读的一侧要写 (nodes as any)；而 v-model 会把表达式同时当成赋值目标，
-// 生成 (nodes as any) = $event，生产构建直接报 Cannot assign to this expression
-// —— dev 模式不报，只有 npm run build 才暴露。
-const onNodesChange = (value: any) => {
-  nodes.value = value
-  onChange()
-}
-
-const onEdgesChange = (value: any) => {
-  edges.value = value
-  onChange()
-}
-
 const onChange = () => {
   // 检测是否初始化，如果是则直接中断程序
   if (isInitializing.value) return
@@ -293,13 +276,12 @@ const onChange = () => {
 // 定义节点更新事件
 const onUpdateNode = (node_data: Record<string, any>) => {
   // 获取该节点对应的索引
-  const idx = nodes.value.findIndex((item: Record<string, any>) => item.id === node_data.id)
+  const idx = nodes.value.findIndex((item: any) => item.id === node_data.id)
 
   // 检测是否存在数据，如果存在则更新
-  const targetNode = nodes.value[idx]
-  if (idx !== -1 && targetNode) {
-    targetNode.data = {
-      ...targetNode.data,
+  if (idx !== -1) {
+    nodes.value[idx].data = {
+      ...nodes.value[idx].data,
       ...node_data,
     }
   }
@@ -353,13 +335,13 @@ onConnect((connection) => {
 })
 
 // 工作流面板点击hooks
-onPaneClick((mouseEvent) => {
+onPaneClick(() => {
   isDebug.value = false
   selectedNode.value = null
 })
 
 // 工作流Edge边点击hooks
-onEdgeClick((edgeMouseEvent) => {
+onEdgeClick(() => {
   isDebug.value = false
   selectedNode.value = null
 })
@@ -376,7 +358,7 @@ onNodeClick((nodeMouseEvent) => {
 })
 
 // 工作流节点拖动停止hooks
-onNodeDragStop((nodeDragEvent) => {
+onNodeDragStop(() => {
   handleUpdateDraftGraph(
     String(route.params?.workflow_id ?? ''),
     convertGraphToReq(nodes.value, edges.value),
@@ -495,10 +477,10 @@ onMounted(async () => {
         :connection-mode="ConnectionMode.Strict"
         :connection-line-options="{ style: { strokeWidth: 2, stroke: '#9ca3af' } }"
         :node-types="NOTE_TYPES"
-        :nodes="(nodes as any)"
-        :edges="(edges as any)"
-        @update:nodes="onNodesChange"
-        @update:edges="onEdgesChange"
+        v-model:nodes="nodes"
+        v-model:edges="edges"
+        @update:nodes="onChange"
+        @update:edges="onChange"
       >
         <!-- 工作流背景 -->
         <background />
@@ -700,7 +682,18 @@ onMounted(async () => {
                 </a-dropdown>
               </div>
               <!-- 调试与预览 -->
-              <a-button type="text" size="small" class="px-2 rounded-lg" @click="isDebug = true">
+              <a-button
+                type="text"
+                size="small"
+                class="px-2 rounded-lg"
+                @click="
+                  () => {
+                    // 清空当前选中节点并设置调试模式
+                    selectedNode = null
+                    isDebug = true
+                  }
+                "
+              >
                 <template #icon>
                   <icon-play-arrow />
                 </template>

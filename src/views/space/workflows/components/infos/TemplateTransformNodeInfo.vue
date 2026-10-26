@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch, type PropType } from 'vue'
-import { type GraphNode, useVueFlow } from '@vue-flow/core'
+import { computed, ref, watch } from 'vue'
+import { useVueFlow } from '@vue-flow/core'
 import { cloneDeep } from 'lodash'
 import { getReferencedVariables } from '@/utils/helper'
 import { Message, type ValidatedError } from '@arco-design/web-vue'
@@ -8,7 +8,13 @@ import { Message, type ValidatedError } from '@arco-design/web-vue'
 // 1.定义自定义组件所需数据
 const props = defineProps({
   visible: { type: Boolean, required: true, default: false },
-  node: { type: Object as PropType<GraphNode>, required: true, default: {} },
+  node: {
+    type: Object as any,
+    required: true,
+    default: () => {
+      return {}
+    },
+  },
   loading: { type: Boolean, required: true, default: false },
 })
 const emits = defineEmits(['update:visible', 'updateNode'])
@@ -79,7 +85,7 @@ watch(
       title: newNode.data.title,
       description: newNode.data.description,
       template: newNode.data.template,
-      inputs: cloneInputs.map((input: Record<string, any>) => {
+      inputs: cloneInputs.map((input: any) => {
         // 5.1 计算引用的变量值信息
         const ref =
           input.value.type === 'ref'

@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { type GraphNode } from '@vue-flow/core'
-import { ref, watch, type PropType } from 'vue'
+import { ref, watch } from 'vue'
 import { Message, type ValidatedError } from '@arco-design/web-vue'
 import { cloneDeep } from 'lodash'
 
 // 1.定义自定义组件所需数据
 const props = defineProps({
   visible: { type: Boolean, required: true, default: false },
-  node: { type: Object as PropType<GraphNode>, required: true, default: {} },
+  node: {
+    type: Object as any,
+    required: true,
+    default: () => {
+      return {}
+    },
+  },
   loading: { type: Boolean, required: true, default: false },
 })
 const emits = defineEmits(['updateNode'])
@@ -34,7 +39,7 @@ const onSubmit = async ({ errors }: { errors: Record<string, ValidatedError> | u
 
   // 4.3 数据校验通过，通过事件触发数据更新
   emits('updateNode', {
-    id: props.node.id,
+    id: cloneNode.id,
     title: form.value.title,
     description: form.value.description,
     inputs: cloneDeep(form.value.inputs),

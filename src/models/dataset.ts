@@ -129,8 +129,7 @@ export type GetDatasetQueriesResponse = BaseResponse<
 export type CreateDocumentsRequest = {
   upload_file_ids: string[]
   process_type: string
-  // process_type 为 automatic 时不传，后端会套用默认分段规则
-  rule?: {
+  rule: {
     pre_process_rules: {
       id: string
       enabled: boolean

@@ -1,11 +1,11 @@
-// 基础响应数据格式：全项目所有接口都是这三个字段
+// 基础响应数据格式
 export type BaseResponse<T> = {
   code: string
   message: string
   data: T
 }
 
-// 基础分页请求参数
+// 基础分页数据结构
 export type BasePaginatorRequest = { current_page: number; page_size: number }
 
 // 基础分页响应数据格式
