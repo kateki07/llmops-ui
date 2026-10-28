@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { v4 } from 'uuid'
 import { markRaw, onMounted, ref } from 'vue'
 import moment from 'moment/moment'
 import { useRoute } from 'vue-router'
@@ -251,7 +252,7 @@ const addNode = (node_type: string) => {
 
   // 3.6 添加节点数据
   nodes.value.push({
-    id: crypto.randomUUID(),
+    id: v4(),
     type: node_type,
     position: { x: xAverage, y: yAverage },
     data: {
@@ -326,7 +327,7 @@ onConnect((connection) => {
   // 将数据添加到edges
   edges.value.push({
     ...connection,
-    id: crypto.randomUUID(),
+    id: v4(),
     source_type: source_node?.type,
     target_type: target_node?.type,
     animated: true,
