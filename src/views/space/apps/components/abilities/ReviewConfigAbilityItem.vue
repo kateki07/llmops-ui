@@ -90,7 +90,7 @@ watch(
 </script>
 
 <template>
-  <div class="">
+  <div class="mb-4">
     <a-collapse-item key="review_config" class="app-ability-item review-config-ability-item">
       <template #header>
         <div class="text-gray-700 font-bold">内容审查</div>

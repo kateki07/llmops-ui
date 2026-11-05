@@ -2,27 +2,25 @@
 // @ts-ignore
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { cloneDeep } from 'lodash'
 import { Message } from '@arco-design/web-vue'
 import { useAccountStore } from '@/stores/account'
-import {
-  useGetAppConversations,
-  useGetWebApp,
-  useStopWebAppChat,
-  useWebAppChat,
-} from '@/hooks/use-web-app'
+import { useGetAppConversations, useGetWebApp, useStopWebAppChat, useWebAppChat } from '@/hooks/use-web-app'
 import {
   useDeleteConversation,
   useGetConversationMessagesWithPage,
   useUpdateConversationIsPinned,
 } from '@/hooks/use-conversation'
+import { useAudioPlayer, useAudioToText } from '@/hooks/use-audio'
 import UpdateNameModal from './components/UpdateNameModal.vue'
 import HumanMessage from '@/components/HumanMessage.vue'
 import AiMessage from '@/components/AiMessage.vue'
 import { useGenerateSuggestedQuestions } from '@/hooks/use-ai'
 import { QueueEvent } from '@/config'
+import { uploadImage } from '@/services/upload-file'
+import AudioRecorder from 'js-audio-recorder'
 
 // 1.定义页面所需数据
 const route = useRoute()
@@ -31,6 +29,12 @@ const updateConversationNameId = ref('')
 const newConversation = ref<any>(null)
 const selectedConversation = ref('')
 const query = ref('')
+const image_urls = ref<string[]>([])
+const fileInput = ref<any>(null)
+const uploadFileLoading = ref(false)
+const isRecording = ref(false)  // 是否正在录音
+const audioBlob = ref<any>(null)  // 录音后音频的blob
+let recorder: any = null  // RecordRTC实例
 const message_id = ref('')
 const task_id = ref('')
 const scroller = ref<any>(null)
@@ -49,6 +53,24 @@ const { handleUpdateConversationIsPinned } = useUpdateConversationIsPinned()
 const { loading: webAppChatLoading, handleWebAppChat } = useWebAppChat()
 const { loading: stopWebAppChatLoading, handleStopWebAppChat } = useStopWebAppChat()
 const { suggested_questions, handleGenerateSuggestedQuestions } = useGenerateSuggestedQuestions()
+const can_image_input = computed(() => {
+  if (web_app.value) {
+    return web_app.value?.app_config?.features?.includes('image_input')
+  }
+  return false
+})
+const can_speech_to_text = computed(() => {
+  if (web_app.value) {
+    return web_app.value?.app_config?.speech_to_text?.enable
+  }
+  return false
+})
+const {
+  loading: audioToTextLoading,
+  text,
+  handleAudioToText,
+} = useAudioToText()
+const { startAudioStream, stopAudioStream } = useAudioPlayer()
 
 // 2.定义会话计算属性，动态展示当前选中会话
 const conversation = computed(() => {
@@ -185,6 +207,7 @@ const handleSubmit = async () => {
   suggested_questions.value = []
   message_id.value = ''
   task_id.value = ''
+  stopAudioStream()
   const selectedConversationTmp = cloneDeep(selectedConversation.value)
 
   // 11.4 往消息列表中添加基础人类消息
@@ -192,6 +215,7 @@ const handleSubmit = async () => {
     id: '',
     conversation_id: '',
     query: query.value,
+    image_urls: image_urls.value,
     answer: '',
     total_token_count: 0,
     latency: 0,
@@ -202,13 +226,16 @@ const handleSubmit = async () => {
   // 11.5 初始化推理过程数据，并清空输入数据
   let position = 0
   const humanQuery = query.value
+  const humanImageUrls = image_urls.value
   query.value = ''
+  image_urls.value = []
 
   // 11.6 调用hooks发起请求
   const req = {
     conversation_id:
       selectedConversation.value === 'new_conversation' ? '' : selectedConversation.value,
     query: humanQuery,
+    image_urls: humanImageUrls,
   }
   await handleWebAppChat(String(route.params?.token), req, (event_response) => {
     // 11.7 提取流式事件响应数据以及事件名称
@@ -306,8 +333,13 @@ const handleSubmit = async () => {
     }
     // 11.16 判断是否开启建议问题生成，如果开启了则发起api请求获取数据
     if (web_app.value?.app_config?.suggested_after_answer.enable && message_id.value) {
-      await handleGenerateSuggestedQuestions(message_id.value)
+      handleGenerateSuggestedQuestions(message_id.value)
       setTimeout(() => scroller.value && scroller.value.scrollToBottom(), 100)
+    }
+
+    // 11.17 判断是否自动播放
+    if (web_app.value?.app_config?.text_to_speech.enable && web_app.value?.app_config?.text_to_speech.auto_play && message_id.value) {
+      startAudioStream(message_id.value)
     }
   }
 }
@@ -339,7 +371,76 @@ const handleSubmitQuestion = async (question: string) => {
   await handleSubmit()
 }
 
-// 15.监听选择会话变化
+// 8.定义文件上传触发器
+const triggerFileInput = () => {
+  // 1.检测上传的图片数量是否超过5
+  if (image_urls.value.length >= 5) {
+    Message.error('对话上传图片数量不能超过5张')
+    return
+  }
+
+  // 2.满足条件触发上传
+  fileInput.value.click()
+}
+
+// 15.定义文件变化监听器
+const handleFileChange = async (event: Event) => {
+  // 1.判断是否在上传中
+  if (uploadFileLoading.value) return
+
+  // 2.获取当前选中的图片
+  const input = event.target as HTMLInputElement
+  const selectedFile = input.files?.[0]
+  if (selectedFile) {
+    try {
+      // 3.调用API接口上传图片
+      uploadFileLoading.value = true
+      const resp = await uploadImage(selectedFile)
+      image_urls.value.push(resp.data.image_url)
+      Message.success('上传图片成功')
+    } finally {
+      uploadFileLoading.value = false
+    }
+  }
+}
+
+// 16.开始录音处理器
+const handleStartRecord = async () => {
+  // 10.1 创建AudioRecorder
+  recorder = new AudioRecorder()
+
+  // 10.2 开始录音并记录录音状态
+  try {
+    isRecording.value = true
+    await recorder.start()
+    Message.success('开始录音')
+  } catch (error: any) {
+    Message.error(`录音失败: ${error}`)
+    isRecording.value = false
+  }
+}
+
+// 17.停止录音处理器
+const handleStopRecord = async () => {
+  if (recorder) {
+    try {
+      // 11.1 等待录音停止并获取录音数据
+      await recorder.stop()
+      audioBlob.value = recorder.getWAVBlob()
+
+      // 11.2 调用语音转文本处理器并将文本填充到query中
+      await handleAudioToText(audioBlob.value)
+      Message.success('语音转文本成功')
+      query.value = text.value
+    } catch (error: any) {
+      Message.error(`录音失败: ${error}`)
+    } finally {
+      isRecording.value = false // 标记为停止录音
+    }
+  }
+}
+
+// 18.监听选择会话变化
 watch(
   () => selectedConversation.value,
   async (newValue) => {
@@ -357,11 +458,14 @@ watch(
         }
       })
     }
+
+    // 15.5 切换会话时停止播放音频
+    stopAudioStream()
   },
   { immediate: true },
 )
 
-// 16.页面挂在完毕请求数据
+// 17.页面挂在完毕请求数据
 onMounted(async () => {
   // 16.1 提取WebApp凭证标识
   const token = String(route.params?.token)
@@ -371,6 +475,11 @@ onMounted(async () => {
 
   // 16.3 默认新增空白会话
   addConversation()
+})
+
+// 18.页面卸载后停止播放
+onUnmounted(() => {
+  stopAudioStream()
 })
 </script>
 
@@ -512,7 +621,7 @@ onMounted(async () => {
       <!-- 底部对话消息列表 -->
       <div
         v-if="messages.length > 0"
-        class="flex flex-col px-6 w-[600px] mx-auto h-[calc(100vh-170px)]"
+        :class="`flex flex-col px-6 w-[600px] mx-auto ${image_urls.length > 0 ? 'h-[calc(100vh-220px)]' : 'h-[calc(100vh-170px)]'}`"
       >
         <dynamic-scroller
           ref="scroller"
@@ -524,8 +633,10 @@ onMounted(async () => {
           <template v-slot="{ item, active }">
             <dynamic-scroller-item :item="item" :active="active" :data-index="item.id">
               <div class="flex flex-col gap-6 py-6">
-                <human-message :query="item.query" :account="accountStore.account" />
+                <human-message :query="item.query" :image_urls="item.image_urls" :account="accountStore.account" />
                 <ai-message
+                  :message_id="item.id"
+                  :enable_text_to_speech="web_app?.app_config?.text_to_speech?.enable"
                   :agent_thoughts="item.agent_thoughts"
                   :answer="item.answer"
                   :app="{ name: web_app.name, icon: web_app.icon }"
@@ -553,7 +664,7 @@ onMounted(async () => {
       <!-- 对话列表为空时展示的对话开场白 -->
       <div
         v-else
-        class="flex flex-col p-6 gap-2 items-center justify-center w-[600px] mx-auto h-[calc(100%-170px)] min-h-[calc(100vh-170px)]"
+        :class="`flex flex-col p-6 gap-2 items-center justify-center w-[600px] mx-auto ${image_urls.length > 0 ? 'h-[calc(100%-220px)] min-h-[calc(100vh-220px)]' : 'h-[calc(100%-170px)] min-h-[calc(100vh-170px)]'}`"
       >
         <!-- 应用图标与名称 -->
         <div class="flex flex-col items-center gap-2">
@@ -587,26 +698,100 @@ onMounted(async () => {
         <div class="px-6 flex items-center gap-4">
           <!-- 输入框组件 -->
           <div
-            class="h-[50px] flex items-center gap-2 px-4 flex-1 border border-gray-200 rounded-full"
+            :class="`${image_urls.length > 0 ? 'h-[100px]' : 'h-[50px]'} flex flex-col justify-center gap-2 px-4 flex-1 border border-gray-200 rounded-[24px]`"
           >
-            <input
-              v-model="query"
-              type="text"
-              class="flex-1 outline-0"
-              @keyup.enter="handleSubmit"
-              :placeholder="`给 &quot;${web_app?.name ?? '&quot;聊天机器人&quot;'}&quot; 发送消息`"
-            />
-            <a-button
-              :loading="webAppChatLoading"
-              type="text"
-              shape="circle"
-              class="!text-gray-700"
-              @click="handleSubmit"
-            >
-              <template #icon>
-                <icon-send :size="16" />
+            <!-- 图片列表 -->
+            <div v-if="image_urls.length > 0 && can_image_input" class="flex items-center gap-2">
+              <div
+                v-for="(image_url, idx) in image_urls"
+                :key="image_url"
+                class="w-10 h-10 relative rounded-lg overflow-hidden group cursor-pointer">
+                <a-avatar
+                  shape="square"
+                  :image-url="image_url"
+                />
+                <div
+                  class="hidden group-hover:flex items-center justify-center bg-gray-700/50 w-10 h-10 absolute top-0"
+                >
+                  <icon-close class="text-white" @click="() => image_urls.splice(idx, 1)" />
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="query"
+                type="text"
+                class="flex-1 outline-0"
+                @keyup.enter="handleSubmit"
+                :placeholder="`给 &quot;${web_app?.name ?? '&quot;聊天机器人&quot;'}&quot; 发送消息`"
+              />
+              <!-- 上传图片输入框 -->
+              <input type="file" ref="fileInput" accept="image/*" @change="handleFileChange" class="hidden" />
+              <a-button
+                v-if="can_image_input"
+                :loading="uploadFileLoading"
+                size="mini"
+                type="text"
+                shape="circle"
+                class="!text-gray-700"
+                @click="triggerFileInput"
+              >
+                <template #icon>
+                  <icon-plus />
+                </template>
+              </a-button>
+              <!-- 语音转文本加载按钮 -->
+              <template v-if="!can_speech_to_text"></template>
+              <template v-else-if="audioToTextLoading">
+                <a-button
+                  size="mini"
+                  type="text"
+                  shape="circle"
+                >
+                  <template #icon>
+                    <icon-loading />
+                  </template>
+                </a-button>
               </template>
-            </a-button>
+              <template v-else>
+                <!-- 开始音频录制按钮 -->
+                <a-button
+                  v-if="!isRecording"
+                  size="mini"
+                  type="text"
+                  shape="circle"
+                  class="!text-gray-700"
+                  @click="handleStartRecord"
+                >
+                  <template #icon>
+                    <icon-voice />
+                  </template>
+                </a-button>
+                <!-- 结束音频录制按钮 -->
+                <a-button
+                  v-else
+                  size="mini"
+                  type="text"
+                  shape="circle"
+                  @click="handleStopRecord"
+                >
+                  <template #icon>
+                    <icon-pause />
+                  </template>
+                </a-button>
+              </template>
+              <a-button
+                :loading="webAppChatLoading"
+                type="text"
+                shape="circle"
+                class="!text-gray-700"
+                @click="handleSubmit"
+              >
+                <template #icon>
+                  <icon-send :size="16" />
+                </template>
+              </a-button>
+            </div>
           </div>
         </div>
         <!-- 底部提示信息 -->

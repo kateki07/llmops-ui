@@ -1,8 +1,4 @@
-import {
-  type BasePaginatorRequest,
-  type BasePaginatorResponse,
-  type BaseResponse,
-} from '@/models/base' // 获取应用信息响应结构
+import { type BasePaginatorRequest, type BasePaginatorResponse, type BaseResponse } from '@/models/base' // 获取应用信息响应结构
 
 // 获取应用信息响应结构
 export type GetAppResponse = BaseResponse<{
@@ -106,6 +102,7 @@ export type GetDebugConversationMessagesWithPageResponse = BasePaginatorResponse
   id: string
   conversation_id: string
   query: string
+  image_urls: string[]
   answer: string
   total_token_count: number
   latency: number

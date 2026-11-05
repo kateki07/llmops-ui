@@ -341,6 +341,8 @@ export const useGetDraftAppConfig = () => {
         retrieval_config: data.retrieval_config,
         tools: data.tools,
         workflows: data.workflows,
+        speech_to_text: data.speech_to_text,
+        text_to_speech: data.text_to_speech,
       }
     } finally {
       loading.value = false
@@ -493,11 +495,12 @@ export const useDebugChat = () => {
   const handleDebugChat = async (
     app_id: string,
     query: string,
+    image_urls: string[] = [],
     onData: (event_response: Record<string, any>) => void,
   ) => {
     try {
       loading.value = true
-      await debugChat(app_id, query, onData)
+      await debugChat(app_id, query, image_urls, onData)
     } finally {
       loading.value = false
     }
